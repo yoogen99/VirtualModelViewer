@@ -1,6 +1,38 @@
 # Cloudflareへの配置
 
+## 自動セットアップ（推奨）
+
+Node.js 24とpnpm 11を使い、次を実行します。
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm setup:cloudflare --dry-run
+pnpm setup:cloudflare
+```
+
+`--dry-run`は計画の表示だけを行い、通信・認証・ファイル変更は行いません。通常実行はCloudflareログイン、アカウント選択、D1・R2の準備、DBマイグレーション、ビルド・公開、アップロード用トークン設定、HTTPSページの疎通確認を順に行います。既存のD1・R2は同名なら再利用します。すでに公開されているR2や、このコマンドが管理していない同名Workerは上書きせず停止します。
+
+Cloudflareのアカウント作成、R2の有効化・契約、Workersの初回サブドメイン設定はDashboardで済ませてください。リソースの作成・公開は利用料金の対象になり得ます。
+
+CIなど対話できない環境では、CloudflareのAPIトークンとアカウントIDを環境変数`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`で渡します。権限は対象アカウントのWorkers Scripts編集、Workers R2 Storage編集、D1編集を用意し、アカウントを自動列挙する場合はAccount Settings読み取りも必要です。既存のWrangler OAuthログインも利用できます。
+
+```powershell
+pnpm setup:cloudflare --name my-model-viewer --account-id <32桁のアカウントID>
+```
+
+生成物はGit管理から除外しています。
+
+- `wrangler.production.json`：本番用のアカウントID・DB ID・バケット名。元の`wrangler.jsonc`は変更しません。
+- `.vmv/upload-token.txt`：Blender・Fusionに設定する管理用トークン。
+- `.vmv/cloudflare.json`：再開用の情報。トークンを含むため他人に共有しないでください。
+
+途中で失敗した場合は、原因を直して同じコマンドを再実行します。既存のリソースとトークンを再利用し、モデルを削除したりトークンを自動変更したりしません。強制終了で`.vmv/setup.lock`が残った場合は、他に実行中のセットアップがないことを確認してからそのファイルだけ削除してください。
+
+通常の更新も`pnpm setup:cloudflare`で行えます。コードだけの更新には`pnpm deploy:production`を使えます。手動でトークンを変更した場合は`.vmv`の保存情報と一致するよう管理してください。本番への実際の作成・公開はモックテストとは別の確認が必要です。
+
 ## 初回設定
+
+以下は自動セットアップを使わない場合の手順です。
 
 CloudflareアカウントでWorkers・R2・D1を利用できることを確認してください。契約と利用量に応じて料金が発生するため、アカウント側で利用状況を管理してください。
 

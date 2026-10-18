@@ -13,6 +13,8 @@
     "deploy": "pnpm build && wrangler deploy",
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
+    "setup:cloudflare": "node scripts/setup-cloudflare.mjs",
+    "deploy:production": "pnpm build && wrangler deploy --config wrangler.production.json",
     "package:addon": "node scripts/package-addon.mjs"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "@types/three": "^0.183.0",
     "@types/webxr": "^0.5.24",
     "esbuild": "^0.28.2",
+    "jsonc-parser": "^3.3.1",
     "miniflare": "^4.20260730.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
