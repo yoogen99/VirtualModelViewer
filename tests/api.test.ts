@@ -132,4 +132,32 @@ describe('model lifecycle against real local D1 and R2', () => {
     const current = await (await call(`/api/models/${one.id}`)).json() as ModelInfo;
     expect((await mf.dispatchFetch(current.assetUrl)).status).toBe(200);
   });
+
+  it('does not resurrect a model deleted during an upload', async () => {
+    const one = await (await upload()).json() as ModelInfo;
+    let uploading!: () => void;
+    const started = new Promise<void>(resolve => { uploading = resolve; });
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const blocked = { ...env, MODELS: {
+      put: async (key: string, bytes: ArrayBuffer, options: R2PutOptions) => {
+        uploading(); await barrier;
+        return env.MODELS.put(key, bytes, options);
+      },
+      delete: (key: string) => env.MODELS.delete(key),
+    } as unknown as R2Bucket };
+    const body = new FormData();
+    body.set('metadata', JSON.stringify({ name: '更新', dimensions: one.dimensions }));
+    body.set('model', new Blob([triangleGlb() as BlobPart]), 'model.glb');
+    const updating = worker.fetch(new Request(`https://viewer.test/api/models/${one.id}`, {
+      method: 'PUT', body, headers: { Authorization: `Bearer ${TOKEN}` },
+    }), blocked);
+    await started;
+    const deleted = await call(`/api/models/${one.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` } });
+    release();
+    expect(deleted.status).toBe(204);
+    expect((await updating).status).toBe(409);
+    expect((await call(`/api/models/${one.id}`)).status).toBe(404);
+    expect((await env.MODELS.list({ prefix: `${one.id}/` })).objects).toHaveLength(0);
+  });
 });

@@ -62,11 +62,16 @@ async function upload(request: Request, env: Env, origin: string, id?: string) {
     }
     chunks.push(chunk.value);
   }
-  const body = new Uint8Array(length);
+  let body = new Uint8Array(length);
   let offset = 0;
   for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.length; }
+  chunks.length = 0;
   let form: FormData;
-  try { form = await new Response(body, { headers: { 'Content-Type': request.headers.get('Content-Type')! } }).formData(); }
+  try {
+    const encoded = new Response(body, { headers: { 'Content-Type': request.headers.get('Content-Type')! } });
+    body = new Uint8Array();
+    form = await encoded.formData();
+  }
   catch { throw new HttpError(400, '送信データを読み込めませんでした。'); }
   const metadata = parseMetadata(form.get('metadata'));
   const file = form.get('model');

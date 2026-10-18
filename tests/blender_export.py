@@ -112,6 +112,26 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
     modifier = obj.modifiers.new('Array', 'ARRAY'); modifier.count = 2
     bpy.context.view_layer.update()
     verify(path, dict(width=2, height=1, depth=1))
+    reset(); obj = cube(1)
+    obj.data.vertices.add(1)
+    obj.data.vertices[-1].co = (100, 100, 100)
+    obj.data.update()
+    bpy.context.view_layer.update()
+    verify(path, dict(width=1, height=1, depth=1))
+    reset(); source = cube(1)
+    collection = bpy.data.collections.new('InstanceSource')
+    for owner in list(source.users_collection):
+        owner.objects.unlink(source)
+    collection.objects.link(source)
+    instance = bpy.data.objects.new('CollectionInstance', None)
+    instance.instance_type = 'COLLECTION'
+    instance.instance_collection = collection
+    bpy.context.scene.collection.objects.link(instance)
+    instance.location = (3, 4, 5)
+    instance.select_set(True)
+    bpy.context.view_layer.objects.active = instance
+    bpy.context.view_layer.update()
+    verify(path, dict(width=1, height=1, depth=1))
     reset(); obj = cube(1); obj.select_set(False)
     try:
         exporter.measure_selection(bpy.context)
@@ -145,4 +165,4 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
         Path(ROOT / 'artifacts' / 'local-model.json').write_text(json.dumps(updated), encoding='utf8')
         print('LOCAL_VIEWER_URL=' + result['viewerUrl'])
 
-print('PASS: 8 geometry cases, empty selection, addon registration; source scene unchanged.')
+print('PASS: 10 geometry cases, empty selection, addon registration; source scene unchanged.')

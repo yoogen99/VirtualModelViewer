@@ -1,4 +1,3 @@
-import '@google/model-viewer';
 import type { ModelViewerElement } from '@google/model-viewer';
 import QRCode from 'qrcode';
 import type { ModelInfo } from '../shared/model';
@@ -25,6 +24,7 @@ async function load(id: string) {
   const data = await response.json() as ModelInfo & { error?: string };
   if (!response.ok) throw new Error(data.error ?? 'モデルを読み込めませんでした。');
   const model = data as ModelInfo;
+  await import('@google/model-viewer');
   document.title = `${model.name} | VirtualModelViewer`;
   document.querySelector('#content')!.innerHTML = `
     <section class="intro"><p class="eyebrow">PLACE IT IN YOUR SPACE</p><h1 id="model-name"></h1><p class="muted">画面の中から、目の前へ。実際のサイズで確認できます。</p></section>
@@ -58,7 +58,11 @@ async function load(id: string) {
     document.querySelector(`#${key}`)!.textContent = `${(model.dimensions[key] * 1000).toLocaleString('ja-JP', { maximumFractionDigits: 2 })} mm`;
   }
   document.querySelector('#expires')!.textContent = `有効期限：${new Date(model.expiresAt).toLocaleString('ja-JP')}（端末の時刻）`;
-  document.querySelector<HTMLImageElement>('#qr')!.src = await QRCode.toDataURL(model.viewerUrl, { width: 256, margin: 2 });
+  void QRCode.toDataURL(model.viewerUrl, { width: 256, margin: 2 }).then(src => {
+    document.querySelector<HTMLImageElement>('#qr')!.src = src;
+  }).catch(() => {
+    document.querySelector<HTMLImageElement>('#qr')!.hidden = true;
+  });
   document.querySelector('#copy')!.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(model.viewerUrl); message('リンクをコピーしました。'); }
     catch { message('コピーできませんでした。ブラウザのアドレス欄からコピーしてください。', true); }
@@ -91,14 +95,16 @@ async function load(id: string) {
         // Request within the click gesture, before lazy-loading or fetching assets.
         const sessionPromise = navigator.xr!.requestSession('immersive-ar', { requiredFeatures: ['local-floor'] });
         ar.disabled = true;
-        const session = await sessionPromise;
+        let session: XRSession | undefined;
         try {
+          session = await sessionPromise;
           const { startQuest } = await import('./quest');
           await startQuest(model.assetUrl, height, session);
           message('Quest表示を終了しました。');
         } finally {
-          await session.end().catch(() => undefined);
-          ar.disabled = false;
+          if (session) await session.end().catch(() => undefined);
+          ar.disabled = Date.now() >= Date.parse(model.expiresAt);
+          if (ar.disabled) expire();
         }
       } else {
         await viewer.activateAR();
