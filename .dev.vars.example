@@ -1,0 +1,2 @@
+# Copy to .dev.vars and replace this value. Never commit the real token.
+UPLOAD_TOKEN=replace-with-a-long-random-token
