@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@types/webxr", "vite/client", "node"]
+  },
+  "include": ["src", "shared", "vite.config.ts"]
+}

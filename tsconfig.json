@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types", "@types/webxr", "vite/client"]
   },
-  "include": ["src", "worker", "shared", "tests", "vite.config.ts"]
+  "include": ["worker", "shared", "tests"]
 }
