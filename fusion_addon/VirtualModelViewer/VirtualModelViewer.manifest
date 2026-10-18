@@ -1,0 +1,10 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "author": "VirtualModelViewer contributors",
+  "description": { "": "選択したボディ・コンポーネントをスマホ・Questで実寸確認します。" },
+  "version": "0.1.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

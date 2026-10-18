@@ -15,7 +15,8 @@
     "db:remote": "wrangler d1 migrations apply DB --remote",
     "setup:cloudflare": "node scripts/setup-cloudflare.mjs",
     "deploy:production": "pnpm build && wrangler deploy --config wrangler.production.json",
-    "package:addon": "node scripts/package-addon.mjs"
+    "package:addon": "node scripts/package-addon.mjs",
+    "package:fusion": "node scripts/package-fusion.mjs"
   },
   "dependencies": {
     "@google/model-viewer": "^4.4.0",
