@@ -51,6 +51,9 @@ describe('model lifecycle against real local D1 and R2', () => {
     expect(first.status).toBe(201);
     const one = await first.json() as ModelInfo;
     expect(one.id).toMatch(/^[a-f0-9]{48}$/);
+    const qr = await call(`/api/models/${one.id}/qr.png`);
+    expect(qr.headers.get('content-type')).toBe('image/png');
+    expect([...new Uint8Array(await qr.arrayBuffer()).slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     expect(Date.parse(one.expiresAt) - Date.now()).toBeGreaterThan(LIFETIME_MS - 10000);
     const asset = await mf.dispatchFetch(one.assetUrl);
     expect(asset.headers.get('cache-control')).toContain('no-store');
@@ -99,8 +102,34 @@ describe('model lifecycle against real local D1 and R2', () => {
     validateGlb(glb.buffer as ArrayBuffer);
     const corrupt = glb.slice(); new DataView(corrupt.buffer).setUint32(12, 999999, true);
     expect(() => validateGlb(corrupt.buffer)).toThrow();
-    const text = new TextDecoder().decode(glb);
-    const external = new TextEncoder().encode(text.replace('"version":"2.0"', '"uri":"https:" '));
-    expect(() => validateGlb(external.buffer)).toThrow();
+    const external = triangleGlb(data => { data.images = [{ uri: 'https://example.com/texture.png' }]; });
+    expect(() => validateGlb(external.buffer as ArrayBuffer)).toThrow();
+  });
+
+  it('allows only one of two competing updates to publish', async () => {
+    const one = await (await upload()).json() as ModelInfo;
+    let puts = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const competing = { ...env, MODELS: {
+      put: async (key: string, bytes: ArrayBuffer, options: R2PutOptions) => {
+        if (++puts === 2) release();
+        await barrier;
+        return env.MODELS.put(key, bytes, options);
+      },
+      delete: (key: string) => env.MODELS.delete(key),
+    } as unknown as R2Bucket };
+    const update = () => {
+      const body = new FormData();
+      body.set('metadata', JSON.stringify({ name: '更新', dimensions: one.dimensions }));
+      body.set('model', new Blob([triangleGlb() as BlobPart]), 'model.glb');
+      return worker.fetch(new Request(`https://viewer.test/api/models/${one.id}`, {
+        method: 'PUT', body, headers: { Authorization: `Bearer ${TOKEN}` },
+      }), competing);
+    };
+    const responses = await Promise.all([update(), update()]);
+    expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+    const current = await (await call(`/api/models/${one.id}`)).json() as ModelInfo;
+    expect((await mf.dispatchFetch(current.assetUrl)).status).toBe(200);
   });
 });

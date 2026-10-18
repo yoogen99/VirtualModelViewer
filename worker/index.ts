@@ -1,5 +1,6 @@
 import { LIFETIME_MS, MAX_MODEL_BYTES, type ModelInfo } from '../shared/model';
 import { HttpError, parseMetadata, validateGlb } from './validation';
+import { qrPng } from './qr';
 
 export interface Env {
   DB: D1Database;
@@ -90,8 +91,9 @@ async function upload(request: Request, env: Env, origin: string, id?: string) {
         .bind(modelId, row.name, row.dimensions, revision, key, row.expires_at).run();
     }
   } catch (error) {
-    // Keep registration if deletion fails; scheduled collection retries it.
-    await env.MODELS.delete(key).catch(() => undefined);
+    // A transport failure may have occurred after D1 committed. Do not delete
+    // a possibly published object; collection checks references before removal.
+    if (error instanceof HttpError && error.status === 409) await env.MODELS.delete(key).catch(() => undefined);
     throw error;
   }
   return json(info(row, origin), previous ? 200 : 201);
@@ -122,7 +124,7 @@ export default {
     }
     try {
       if (url.pathname === '/api/models' && request.method === 'POST') return await upload(request, env, url.origin);
-      const match = /^\/api\/models\/([^/]+)(\/asset\.glb)?$/.exec(url.pathname);
+      const match = /^\/api\/models\/([^/]+)(\/(?:asset\.glb|qr\.png))?$/.exec(url.pathname);
       if (!match || !ID.test(match[1])) throw new HttpError(404, 'URLを確認してください。');
       const [, id, asset] = match;
       if (!asset && request.method === 'PUT') return await upload(request, env, url.origin, id);
@@ -133,13 +135,17 @@ export default {
         const { results } = await env.DB.prepare('SELECT object_key FROM objects WHERE object_key LIKE ?').bind(`${id}/%`).all<{ object_key: string }>();
         if (results.length) {
           await env.MODELS.delete(results.map(r => r.object_key));
-          await env.DB.batch(results.map(r => env.DB.prepare('DELETE FROM objects WHERE object_key=?').bind(r.object_key)));
+          // Keep registrations until collection: an in-flight upload may still
+          // finish its put after this delete. Its failed CAS cannot republish.
         }
         return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
       }
       if (request.method !== 'GET' && request.method !== 'HEAD') throw new HttpError(405, '対応していない操作です。');
       const row = await find(env, id);
       if (!asset) return json(info(row, url.origin));
+      if (asset === '/qr.png') return new Response(request.method === 'HEAD' ? null : qrPng(info(row, url.origin).viewerUrl).buffer as ArrayBuffer, {
+        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' },
+      });
       if (url.searchParams.get('v') && url.searchParams.get('v') !== row.revision) throw new HttpError(404, 'モデルが更新されました。ページを再読み込みしてください。');
       const object = await env.MODELS.get(row.object_key);
       if (!object) throw new HttpError(404, 'モデルファイルが見つかりません。');

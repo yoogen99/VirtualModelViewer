@@ -1,4 +1,4 @@
-export function triangleGlb(): Uint8Array {
+export function triangleGlb(mutate?: (data: any) => void): Uint8Array {
   const data = {
     asset: { version: '2.0' }, scene: 0,
     scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],
@@ -6,6 +6,7 @@ export function triangleGlb(): Uint8Array {
     buffers: [{ byteLength: 36 }], bufferViews: [{ buffer: 0, byteLength: 36 }],
     accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0] }],
   };
+  mutate?.(data);
   const text = JSON.stringify(data);
   const encoded = new TextEncoder().encode(text.padEnd(Math.ceil(text.length / 4) * 4, ' '));
   const result = new Uint8Array(12 + 8 + encoded.length + 8 + 36);

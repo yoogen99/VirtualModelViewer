@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json && vite build",
     "check": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
-    "serve": "wrangler dev",
+    "serve": "wrangler dev --ip 127.0.0.1 --port 8797",
     "deploy": "pnpm build && wrangler deploy",
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@google/model-viewer": "^4.4.0",
+    "fflate": "^0.8.3",
     "qrcode": "^1.5.4",
     "three": "^0.183.0"
   },
@@ -26,7 +28,6 @@
     "@types/three": "^0.183.0",
     "@types/webxr": "^0.5.24",
     "esbuild": "^0.28.2",
-    "fflate": "^0.8.3",
     "miniflare": "^4.20260730.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
