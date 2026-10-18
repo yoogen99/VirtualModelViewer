@@ -67,7 +67,7 @@ export async function setup(options = {}, dependencies = {}) {
   const template = parse(await readFile(resolve(root, 'wrangler.jsonc'), 'utf8'), errors);
   if (errors.length) throw new Error(`wrangler.jsoncを読み込めません：${printParseErrorCode(errors[0].error)}`);
   const name = options.name ?? template.name;
-  if (!NAME.test(name)) throw new Error('名前は英小文字から始まる3〜57文字の英小文字・数字・ハイフンで指定してください。');
+  if (typeof name !== 'string' || !NAME.test(name)) throw new Error('名前は英小文字から始まる3〜57文字の英小文字・数字・ハイフンで指定してください。');
   let accountId = options.accountId ?? env.CLOUDFLARE_ACCOUNT_ID ?? template.account_id;
   if (accountId && !ACCOUNT.test(accountId)) throw new Error('CloudflareアカウントIDは32桁の16進数です。');
   const configPath = resolve(root, 'wrangler.production.json');
@@ -199,7 +199,7 @@ export async function setup(options = {}, dependencies = {}) {
     let reachable = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        const response = await fetcher(viewerUrl, { redirect: 'error' });
+        const response = await fetcher(viewerUrl, { redirect: 'error', signal: AbortSignal.timeout(10000) });
         reachable = response.ok && (await response.text()).includes('VirtualModelViewer');
       } catch { /* DNS / first-deploy propagation. */ }
       if (reachable) break;

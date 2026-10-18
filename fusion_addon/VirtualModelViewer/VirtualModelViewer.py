@@ -57,7 +57,7 @@ def _show_palette():
     _palette = _ui.palettes.itemById(PALETTE)
     if not _palette:
         _palette = _ui.palettes.add(PALETTE, 'VirtualModelViewer · 実寸AR',
-                                    (Path(__file__).parent / 'palette.html').as_uri(),
+                                    (Path(__file__).resolve().parent / 'palette.html').as_uri(),
                                     True, True, True, 440, 720, True)
         handler = HtmlHandler()
         _palette.incomingFromHTML.add(handler)
@@ -121,7 +121,10 @@ class CompletedHandler(adsk.core.CustomEventHandler):
                     _status = result
                     continue
                 if kind == 'publish':
-                    saved = storage.write_model(design, result)
+                    try:
+                        saved = storage.write_model(design, result)
+                    except (RuntimeError, ValueError):
+                        saved = False
                     _qr, _qr_model = result.get('qr', ''), result['id']
                     _status = 'リンクを発行・更新しました。端末側で開き直してください。' if saved else '元のデザインが閉じられたため記録できませんでした。URL：' + result['viewerUrl']
                 elif kind == 'delete':
@@ -222,6 +225,7 @@ class DestroyHandler(adsk.core.CommandEventHandler):
 
 class SendCreated(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
+        preselected = [_ui.activeSelections.item(i).entity for i in range(_ui.activeSelections.count)]
         command = args.command
         command.isExecutedWhenPreEmpted = False
         command.okButtonText = '送信してリンクを発行' if _mode == 'NEW' else 'モデルを更新'
@@ -240,20 +244,37 @@ class SendCreated(adsk.core.CommandCreatedEventHandler):
         changed = SelectionChanged(bundle)
         execute = SendExecute(bundle)
         validate = ValidateSend(bundle)
-        handlers = [changed, execute, validate]
+        activate = SendActivated(inputs, preselected, changed)
+        handlers = [changed, execute, validate, activate]
         destroy = DestroyHandler(handlers)
         handlers.append(destroy)
         command.inputChanged.add(changed)
         command.execute.add(execute)
         command.validateInputs.add(validate)
+        command.activate.add(activate)
         command.destroy.add(destroy)
         _commands.append(handlers)
-        # Preserve the user's preselection where it matches supported entities.
-        for i in range(_ui.activeSelections.count):
-            entity = _ui.activeSelections.item(i).entity
-            if entity.objectType.split('::')[-1] in {'BRepBody', 'MeshBody', 'Occurrence', 'Component'}:
-                selection.addSelection(entity)
         changed.refresh(inputs)
+
+
+class SendActivated(adsk.core.CommandEventHandler):
+    def __init__(self, inputs, preselected, changed):
+        super().__init__()
+        self.inputs, self.preselected, self.changed = inputs, preselected, changed
+        self.started = False
+
+    def notify(self, args):
+        if self.started:
+            return
+        self.started = True
+        selection = self.inputs.itemById('selection')
+        # Fusion forbids addSelection during commandCreated. If Fusion already
+        # adopted the current selection automatically, do not add it again.
+        if selection.selectionCount == 0:
+            for entity in self.preselected:
+                if entity.objectType.split('::')[-1] in {'BRepBody', 'MeshBody', 'Occurrence', 'Component'}:
+                    selection.addSelection(entity)
+        self.changed.refresh(self.inputs)
 
 
 class SelectionChanged(adsk.core.InputChangedEventHandler):

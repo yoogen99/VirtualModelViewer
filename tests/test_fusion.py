@@ -8,7 +8,7 @@ import sys
 import tempfile
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 package = ModuleType('vmv_fusion_tests')
@@ -247,6 +247,25 @@ class CompletionTests(unittest.TestCase):
         self.complete((False,'network failed'))
         self.assertEqual(storage.read_model(self.original)['id'],'a'*48)
         self.assertFalse(self.ui._busy)
+
+    def test_published_url_survives_attribute_write_failure(self):
+        with patch.object(storage,'write_model',side_effect=RuntimeError('document unavailable')):
+            self.complete((True,{'id':'a'*48,'viewerUrl':'https://viewer.example/v/test'}))
+        self.assertIn('https://viewer.example/v/test',self.ui._status)
+        self.assertEqual(storage.read_model(self.active),{})
+
+    def test_preselection_is_adopted_at_activation_and_only_once(self):
+        selected = SimpleNamespace(selectionCount=0, addSelection=Mock())
+        inputs = SimpleNamespace(itemById=lambda key:selected)
+        changed = SimpleNamespace(refresh=Mock())
+        entity = SimpleNamespace(objectType='adsk::fusion::BRepBody')
+        activation = self.ui.SendActivated(inputs,[entity],changed)
+        selected.addSelection.assert_not_called()
+        activation.notify(None); activation.notify(None)
+        selected.addSelection.assert_called_once_with(entity)
+        selected.selectionCount=1; selected.addSelection.reset_mock()
+        self.ui.SendActivated(inputs,[entity],changed).notify(None)
+        selected.addSelection.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()
