@@ -14,6 +14,8 @@
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
     "setup:cloudflare": "node scripts/setup-cloudflare.mjs",
+    "share": "pnpm build && node scripts/share-local.mjs",
+    "share:stop": "node scripts/share-local.mjs --stop",
     "deploy:production": "pnpm build && wrangler deploy --config wrangler.production.json",
     "package:addon": "node scripts/package-addon.mjs",
     "package:fusion": "node scripts/package-fusion.mjs"
