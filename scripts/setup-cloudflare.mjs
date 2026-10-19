@@ -125,9 +125,12 @@ export async function setup(options = {}, dependencies = {}) {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       if (allow404 && response.status === 404) return null;
+      const envelope = await response.json().catch(() => null);
+      if (envelope?.errors?.some(error => error.code === 10042)) {
+        throw new Error('Cloudflare R2の初回有効化が必要です。DashboardのR2画面で有効化後、同じコマンドを再実行してください。');
+      }
       if (!response.ok) throw new Error(`Cloudflare API HTTP ${response.status}。認証権限とR2の利用設定を確認してください。`);
-      const envelope = await response.json();
-      if (!envelope.success) throw new Error('Cloudflare APIが操作を拒否しました。アカウントの権限・利用設定を確認してください。');
+      if (!envelope?.success) throw new Error('Cloudflare APIが操作を拒否しました。アカウントの権限・利用設定を確認してください。');
       return envelope.result;
     }
     if (!accountId) {

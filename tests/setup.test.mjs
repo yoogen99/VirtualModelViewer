@@ -21,6 +21,7 @@ async function fixture() {
     calls.push({ url, options });
     if (url.startsWith('https://virtual-model-viewer.')) return new Response('<title>VirtualModelViewer</title>');
     const path = new URL(url).pathname;
+    if (state.r2Disabled && path.includes('/r2/')) return Response.json({ success: false, errors: [{ code: 10042, message: 'Enable R2' }] }, { status: 403 });
     const ok = result => Response.json({ success: true, result });
     if (path.endsWith('/workers/subdomain')) return ok({ subdomain: 'test-account' });
     if (path.endsWith('/settings')) return state.worker ? ok({}) : new Response('', { status: 404 });
@@ -93,5 +94,13 @@ describe('Cloudflare setup', () => {
     await expect(setup({ root: f.root, accountId: 'bad' }, f.dependencies)).rejects.toThrow('アカウントID');
     expect(f.fetcher).not.toHaveBeenCalled();
     expect(() => argumentsFor(['--account-id'])).toThrow();
+  });
+  it('explains R2 activation and resumes without duplicating D1', async () => {
+    const f = await fixture(); f.state.r2Disabled = true;
+    await expect(setup({ root: f.root }, f.dependencies)).rejects.toThrow('R2の初回有効化');
+    expect(f.state.db).toBe(true);
+    f.state.r2Disabled = false;
+    await setup({ root: f.root }, f.dependencies);
+    expect(f.calls.filter(c => c.options.method === 'POST' && new URL(c.url).pathname.endsWith('/d1/database'))).toHaveLength(1);
   });
 });
