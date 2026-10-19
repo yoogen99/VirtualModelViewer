@@ -40,6 +40,7 @@ export async function share({ project = root, binary = process.env.VMV_CLOUDFLAR
   catch { throw new Error('配信はすでに起動中です。停止するには pnpm share:stop を実行してください。異常終了後は .vmv/local/session.lock を削除してください。'); }
   let server;
   let child;
+  let childClosed = false;
   let stopTimer;
   const connectionFile = resolve(folder, 'connection.json');
   const stopFile = resolve(folder, 'stop');
@@ -76,7 +77,7 @@ export async function share({ project = root, binary = process.env.VMV_CLOUDFLAR
       timeout = setTimeout(() => reject(new Error('一時URLの発行がタイムアウトしました。ネット接続を確認してください。')), 60_000);
       const stop = () => { clearTimeout(timeout); finish(); reject(new Error('一時公開ツールが終了しました。')); };
       child.once('error', stop);
-      child.once('close', stop);
+      child.once('close', () => { childClosed = true; stop(); });
       const parse = chunk => {
         output = (output + chunk.toString()).slice(-16384);
         const value = tunnelUrl(output);
@@ -105,7 +106,7 @@ export async function share({ project = root, binary = process.env.VMV_CLOUDFLAR
     process.removeListener('SIGTERM', requestStop);
     clearInterval(stopTimer);
     if (published) await unlink(connectionFile).catch(() => undefined);
-    if (child && child.exitCode === null) {
+    if (child && !childClosed) {
       await new Promise(accept => { child.once('close', accept); child.kill(); });
     }
     await server?.close();
