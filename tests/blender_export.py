@@ -140,6 +140,22 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
         pass
     reset(); obj = cube(1)
     addon.register()
+    # Connection-file mode follows changed tunnel URLs without saving the token in Blender.
+    from types import SimpleNamespace
+    connection = Path(folder) / 'connection.json'
+    (Path(folder) / 'upload-token.txt').write_text('a' * 64, encoding='utf-8')
+    prefs = SimpleNamespace(local_connection_file=str(connection))
+    context = SimpleNamespace(preferences=SimpleNamespace(addons={
+        'virtual_model_viewer': SimpleNamespace(preferences=prefs)}))
+    for host in ['first', 'next']:
+        connection.write_text(json.dumps({'serverUrl': f'https://{host}.trycloudflare.com'}), encoding='utf-8')
+        assert addon._preferences(context) == (f'https://{host}.trycloudflare.com', 'a' * 64)
+    connection.unlink()
+    try:
+        addon._preferences(context)
+        raise AssertionError('stopped local share accepted')
+    except ValueError:
+        pass
     bpy.context.scene.vmv_state.viewer_url = 'https://viewer.example/v/test'
     assert bpy.context.scene.vmv_state.viewer_url.endswith('/test')
     addon.unregister()

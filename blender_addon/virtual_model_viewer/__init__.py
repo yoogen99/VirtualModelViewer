@@ -34,11 +34,16 @@ class VMVPreferences(bpy.types.AddonPreferences):
 
     server_url: StringProperty(name='配信先URL', default='https://your-worker.workers.dev')
     upload_token: StringProperty(name='管理用トークン', subtype='PASSWORD', options={'SKIP_SAVE'})
+    local_connection_file: StringProperty(name='PC配信設定ファイル', subtype='FILE_PATH')
 
     def draw(self, context):
-        self.layout.prop(self, 'server_url')
-        self.layout.prop(self, 'upload_token')
-        self.layout.label(text='トークンは保存されません。起動ごとに入力するか環境変数 VMV_UPLOAD_TOKEN を指定。', icon='INFO')
+        self.layout.prop(self, 'local_connection_file')
+        self.layout.label(text='PC配信では connection.json を指定。起動ごとのURL・トークンを自動で読み込みます。')
+        column = self.layout.column()
+        column.enabled = not bool(self.local_connection_file)
+        column.prop(self, 'server_url')
+        column.prop(self, 'upload_token')
+        column.label(text='手動接続のトークンは保存されません。起動ごとに入力するか環境変数 VMV_UPLOAD_TOKEN を指定。', icon='INFO')
 
 
 class VMVState(bpy.types.PropertyGroup):
@@ -51,6 +56,14 @@ class VMVState(bpy.types.PropertyGroup):
 
 def _preferences(context):
     prefs = context.preferences.addons[__package__].preferences
+    if prefs.local_connection_file:
+        try:
+            path = Path(bpy.path.abspath(prefs.local_connection_file)).resolve()
+            session = json.loads(path.read_text(encoding='utf-8'))
+            token_path = path.parent / 'upload-token.txt'
+            return client.base_url(session['serverUrl']), token_path.read_text(encoding='utf-8').strip()
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ValueError('PC配信を起動してください。接続設定ファイルを読み込めません。') from exc
     return client.base_url(prefs.server_url), prefs.upload_token or os.environ.get('VMV_UPLOAD_TOKEN', '')
 
 
@@ -298,7 +311,9 @@ class VMV_PT_panel(bpy.types.Panel):
             # Split long Japanese messages so errors remain visible in a narrow sidebar.
             for offset in range(0, len(_status), 22):
                 layout.label(text=_status[offset:offset + 22])
-        layout.label(text='配信先とトークンはアドオン設定で指定', icon='PREFERENCES')
+        prefs = context.preferences.addons[__package__].preferences
+        layout.label(text='PC配信に接続（配信ソフトの起動が必要）' if prefs.local_connection_file
+                     else '配信先とトークンはアドオン設定で指定', icon='PREFERENCES')
 
 
 CLASSES = (VMVPreferences, VMVState, VMV_OT_publish, VMV_OT_copy, VMV_OT_delete, VMV_OT_qr, VMV_PT_panel)
