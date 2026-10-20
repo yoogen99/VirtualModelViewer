@@ -140,6 +140,14 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
         pass
     reset(); obj = cube(1)
     addon.register()
+    assert addon._preview is not None and not addon._preview
+    qr_image = bpy.data.images.new('QR preview test', width=8, height=8)
+    qr_image.filepath_raw = str(Path(folder) / 'qr-source.png')
+    qr_image.file_format = 'PNG'
+    qr_image.save()
+    addon._load_qr(Path(qr_image.filepath_raw).read_bytes(), 'https://viewer.example/v/test')
+    assert 'qr' in addon._preview and addon._qr_url.endswith('/test')
+    bpy.data.images.remove(qr_image)
     # Connection-file mode follows changed tunnel URLs without saving the token in Blender.
     from types import SimpleNamespace
     connection = Path(folder) / 'connection.json'

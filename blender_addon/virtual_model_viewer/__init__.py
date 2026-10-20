@@ -76,7 +76,7 @@ def _redraw():
 
 def _load_qr(png, url):
     global _qr_url
-    if not _preview:
+    if _preview is None:
         return
     if 'qr' in _preview:
         del _preview['qr']
@@ -336,7 +336,7 @@ def unregister():
     _busy = False
     _qr_url = ''
     _status = ''
-    if _preview:
+    if _preview is not None:
         bpy.utils.previews.remove(_preview)
         _preview = None
     del bpy.types.Scene.vmv_state
