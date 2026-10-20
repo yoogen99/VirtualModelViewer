@@ -142,12 +142,49 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
     addon.register()
     assert addon._preview is not None and not addon._preview
     qr_image = bpy.data.images.new('QR preview test', width=8, height=8)
+    qr_image.pixels = [channel for n in range(64) for channel in (float(n % 2),) * 3 + (1.0,)]
     qr_image.filepath_raw = str(Path(folder) / 'qr-source.png')
     qr_image.file_format = 'PNG'
     qr_image.save()
     addon._load_qr(Path(qr_image.filepath_raw).read_bytes(), 'https://viewer.example/v/test')
     assert 'qr' in addon._preview and addon._qr_url.endswith('/test')
+    preview = addon._preview['qr']
+    assert tuple(preview.image_size) == (8, 8)
+    assert len(preview.image_pixels_float) == 8 * 8 * 4
+    assert set(preview.image_pixels_float[::4]) == {0.0, 1.0}
     bpy.data.images.remove(qr_image)
+
+    # Defer completion until the operator is released, as Blender does after execute.
+    from unittest.mock import patch
+    callbacks = []
+    class ReleasedOperator:
+        released = False
+        @property
+        def mode(self):
+            if self.released:
+                raise ReferenceError('Operator RNA was released')
+            return 'NEW'
+    operation = ReleasedOperator()
+    server = 'https://viewer.example'
+    result = {'id': 'a' * 48, 'viewerUrl': server + '/v/' + 'a' * 48,
+              'expiresAt': '2099-01-01T00:00:00Z', 'dimensions': {'width': 1, 'height': 1, 'depth': 1}}
+    def deferred(work, complete, cleanup=None):
+        callbacks.append((work, complete, cleanup))
+        return True
+    with patch.object(addon, '_preferences', return_value=(server, 'a' * 64)), \
+         patch.object(addon, '_job', side_effect=deferred), \
+         patch.object(client, 'publish', return_value=result), \
+         patch.object(client, 'fetch_qr', return_value=(Path(folder) / 'qr-source.png').read_bytes()):
+        assert addon.VMV_OT_publish.execute(operation, bpy.context) == {'FINISHED'}
+        operation.released = True
+        work, complete, cleanup = callbacks.pop()
+        try:
+            complete(work())
+        finally:
+            cleanup()
+    assert addon._status == 'リンクを発行しました。'
+    assert tuple(addon._preview['qr'].image_size) == (8, 8)
+    assert bpy.context.scene.vmv_state.model_id == 'a' * 48
     # Connection-file mode follows changed tunnel URLs without saving the token in Blender.
     from types import SimpleNamespace
     connection = Path(folder) / 'connection.json'
@@ -189,4 +226,4 @@ with tempfile.TemporaryDirectory(prefix='vmv-tests-') as folder:
         Path(ROOT / 'artifacts' / 'local-model.json').write_text(json.dumps(updated), encoding='utf8')
         print('LOCAL_VIEWER_URL=' + result['viewerUrl'])
 
-print('PASS: 10 geometry cases, empty selection, addon registration; source scene unchanged.')
+print('PASS: 10 geometry cases, empty selection, QR pixels, released-operator completion, connection settings; source scene unchanged.')

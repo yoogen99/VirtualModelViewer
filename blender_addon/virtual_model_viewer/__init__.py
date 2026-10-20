@@ -83,7 +83,19 @@ def _load_qr(png, url):
     with tempfile.TemporaryDirectory(prefix='vmv-qr-') as folder:
         path = Path(folder) / 'qr.png'
         path.write_bytes(png)
-        _preview.load('qr', str(path), 'IMAGE', force_reload=True)
+        # PreviewCollection.load decodes lazily, after this temporary file is gone.
+        # Decode now and keep the pixels in memory for the whole preview lifetime.
+        image = bpy.data.images.load(str(path), check_existing=False)
+        try:
+            width, height = image.size
+            if not width or not height:
+                raise ValueError('QRコードの画像を読み込めませんでした。')
+            pixels = list(image.pixels)
+            preview = _preview.new('qr')
+            preview.image_size = (width, height)
+            preview.image_pixels_float = pixels
+        finally:
+            bpy.data.images.remove(image)
     _qr_url = url
 
 
@@ -122,8 +134,10 @@ def _job(work, complete, cleanup=None):
                 complete(result)
             else:
                 _status = result
-        except (ReferenceError, RuntimeError):
+        except ReferenceError:
             _status = '通信が完了しました。シーンを開き直したため結果を反映できませんでした。'
+        except Exception:
+            _status = '通信は完了しましたが、表示の更新に失敗しました。QRコードを読み込み直してください。'
         _redraw()
         return None
 
@@ -170,8 +184,11 @@ class VMV_OT_publish(bpy.types.Operator):
             if len(token) < 32:
                 raise ValueError('アドオン設定で32文字以上の管理用トークンを指定してください。')
             state = context.scene.vmv_state
-            model_id = state.model_id if self.mode == 'UPDATE' else ''
-            if self.mode == 'UPDATE' and (not model_id or state.server_url != server):
+            # Blender releases the operator after execute returns. Async callbacks
+            # must use plain values, rather than touching its expired RNA object.
+            updating = self.mode == 'UPDATE'
+            model_id = state.model_id if updating else ''
+            if updating and (not model_id or state.server_url != server):
                 raise ValueError('この配信先で発行したリンクがありません。新規送信してください。')
             folder = tempfile.TemporaryDirectory(prefix='vmv-')
             filepath = str(Path(folder.name) / 'model.glb')
@@ -195,7 +212,7 @@ class VMV_OT_publish(bpy.types.Operator):
                 state.dimensions_json = json.dumps(result['dimensions'])
                 if result.get('qr_png'):
                     _load_qr(result['qr_png'], state.viewer_url)
-                _status = 'リンクを発行しました。' if self.mode != 'UPDATE' else 'モデルを更新しました。端末側で開き直してください。'
+                _status = 'モデルを更新しました。端末側で開き直してください。' if updating else 'リンクを発行しました。'
 
             if not _job(work, complete, folder.cleanup):
                 folder.cleanup()
