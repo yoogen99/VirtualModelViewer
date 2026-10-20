@@ -33,6 +33,7 @@ it('publishes connection settings, rejects a second session, and cleans up on st
   await vi.waitFor(async () => expect(JSON.parse(await readFile(connection(), 'utf8')).serverUrl)
     .toBe('https://test-share.trycloudflare.com'));
   const state = JSON.parse(await readFile(connection(), 'utf8'));
+  expect(JSON.parse(await readFile(lock(), 'utf8')).pid).toBe(process.pid);
   expect(state).not.toHaveProperty('uploadToken');
   expect((await readFile(state.tokenFile, 'utf8')).length).toBe(64);
   await expect(run()).rejects.toThrow('すでに起動中');

@@ -13,6 +13,14 @@ pnpm install --frozen-lockfile
 pnpm share
 ```
 
+Windowsで画面を閉じても配信を続けたい場合は、初回に`pnpm build`を済ませ、リポジトリ直下の`Start-PC-Sharing.cmd`をダブルクリックします。配信はバックグラウンドで続き、停止は`Stop-PC-Sharing.cmd`から行えます。`pnpm share`は実行したターミナルを開いたまま使う方法です。
+
+Node.jsを通常の場所にインストールしていない場合は、初回のみ次を実行します。指定した実行ファイルの場所はPC内に記録するため、次回からダブルクリックで起動できます。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 -NodePath "C:\path\to\node.exe"
+```
+
 初回は公式GitHubのCloudflare配布元から`cloudflared`を取得し、固定バージョンのSHA-256を照合します。自動導入はWindows x64に対応しています。ほかの環境では公式の実行ファイルを用意し、`VMV_CLOUDFLARED`環境変数に絶対パスを指定してください。
 
 起動すると`https://….trycloudflare.com`と、PC内の`connection.json`のパスを表示します。PCの電源とネット接続を維持し、配信を起動したまま使います。スリープ中もアクセスできません。
@@ -31,6 +39,8 @@ Fusionでは表示された公開URLと`.vmv/local/upload-token.txt`の内容を
 ## 停止・再起動
 
 起動した画面でCtrl+Cを押すか、別の画面で次を実行します。
+
+バックグラウンドで起動した場合は`Stop-PC-Sharing.cmd`をダブルクリックしてください。
 
 ```powershell
 pnpm share:stop

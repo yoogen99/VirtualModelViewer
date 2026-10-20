@@ -52,6 +52,7 @@ export async function share({ project = root, binary = process.env.VMV_CLOUDFLAR
   process.once('SIGINT', requestStop);
   process.once('SIGTERM', requestStop);
   try {
+    await lock.writeFile(JSON.stringify({ pid: process.pid }));
     await unlink(connectionFile).catch(() => undefined);
     await unlink(stopFile).catch(() => undefined);
     stopTimer = setInterval(async () => {
